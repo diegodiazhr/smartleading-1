@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { Grant } from '@/lib/types'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -11,7 +11,6 @@ import {
   Search,
   Filter,
   Clock,
-  Euro,
   ChevronRight,
   Globe,
   MapPin,
@@ -22,6 +21,11 @@ import { formatCurrency, daysUntil, urgencyLabel, grantTypeLabel, statusLabel, c
 
 interface Props {
   initialGrants: Grant[]
+}
+
+interface InfosubvencionesResponse {
+  data?: Grant[]
+  error?: string
 }
 
 const SCOPES = [
@@ -60,9 +64,68 @@ export default function GrantBrowser({ initialGrants }: Props) {
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [showFilters, setShowFilters] = useState(false)
   const [sortBy, setSortBy] = useState<'deadline' | 'amount' | 'difficulty'>('deadline')
+  const [externalGrants, setExternalGrants] = useState<Grant[]>([])
+  const [externalLoading, setExternalLoading] = useState(false)
+  const [externalError, setExternalError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const query = search.trim()
+    const controller = new AbortController()
+    const timer = setTimeout(async () => {
+      setExternalLoading(true)
+      setExternalError(null)
+
+      try {
+        const params = new URLSearchParams({
+          page: '0',
+          pageSize: query ? '25' : '15',
+        })
+
+        if (query) params.set('q', query)
+
+        const response = await fetch(`/api/infosubvenciones/convocatorias?${params.toString()}`, {
+          signal: controller.signal,
+          cache: 'no-store',
+        })
+
+        if (!response.ok) {
+          throw new Error(`infosubvenciones_http_${response.status}`)
+        }
+
+        const payload = await response.json() as InfosubvencionesResponse
+        setExternalGrants(Array.isArray(payload.data) ? payload.data : [])
+        if (payload.error) {
+          setExternalError(payload.error)
+        }
+      } catch (error) {
+        if ((error as { name?: string }).name === 'AbortError') {
+          return
+        }
+        setExternalGrants([])
+        setExternalError('No se ha podido consultar infosubvenciones.es en este momento.')
+      } finally {
+        setExternalLoading(false)
+      }
+    }, 350)
+
+    return () => {
+      clearTimeout(timer)
+      controller.abort()
+    }
+  }, [search])
+
+  const mergedGrants = useMemo(() => {
+    const byId = new Map<string, Grant>()
+    for (const grant of [...initialGrants, ...externalGrants]) {
+      if (!byId.has(grant.id)) {
+        byId.set(grant.id, grant)
+      }
+    }
+    return Array.from(byId.values())
+  }, [initialGrants, externalGrants])
 
   const filtered = useMemo(() => {
-    let grants = [...initialGrants]
+    let grants = [...mergedGrants]
 
     if (search) {
       const q = search.toLowerCase()
@@ -99,7 +162,7 @@ export default function GrantBrowser({ initialGrants }: Props) {
     })
 
     return grants
-  }, [initialGrants, search, scope, type, statusFilter, selectedTags, sortBy])
+  }, [mergedGrants, search, scope, type, statusFilter, selectedTags, sortBy])
 
   function toggleTag(tag: string) {
     setSelectedTags(prev =>
@@ -220,6 +283,11 @@ export default function GrantBrowser({ initialGrants }: Props) {
       {/* Results count */}
       <p className="text-sm text-gray-500">
         <span className="font-semibold text-gray-900">{filtered.length}</span> subvenciones encontradas
+      </p>
+      <p className="text-xs text-gray-400">
+        {externalLoading
+          ? 'Actualizando resultados de infosubvenciones.es...'
+          : externalError ?? 'Incluye resultados en tiempo real de infosubvenciones.es'}
       </p>
 
       {/* Grant cards */}

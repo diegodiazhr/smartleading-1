@@ -44,6 +44,7 @@ interface ConvocatoriaDetail {
   instrumentos?: Array<{ descripcion: string | null }> | null
   sectores?: Array<{ descripcion: string | null; codigo?: string | null }> | null
   regiones?: Array<{ descripcion: string | null }> | null
+  tiposBeneficiarios?: Array<{ descripcion: string | null }> | null
 }
 
 interface ConvocatoriaListResponse {
@@ -112,6 +113,51 @@ function sleep(ms: number) {
   return new Promise<void>(resolve => setTimeout(resolve, ms))
 }
 
+/**
+ * Parse BDNS tiposBeneficiarios into stable tag strings.
+ *
+ * Tags are prefixed with "ben:" so matching/search can reliably detect them:
+ *   ben:empresa      — private companies, SMEs, autónomos can apply
+ *   ben:startup      — startups/emprendedores explicitly named
+ *   ben:administracion — only public bodies; private companies are excluded
+ *   ben:fundacion    — only non-profits/foundations; private companies are excluded
+ *
+ * When the list is empty we don't add any tag (unknown → neutral).
+ */
+function parseBeneficiaryTags(
+  beneficiarios: Array<{ descripcion: string | null }> | null | undefined,
+): string[] {
+  if (!beneficiarios || beneficiarios.length === 0) return []
+  const descs = beneficiarios.map(b => (b.descripcion ?? '').toLowerCase())
+  const tags: string[] = []
+
+  const hasPrivate = descs.some(d =>
+    d.includes('empresa') || d.includes('pyme') || d.includes('micropyme') ||
+    d.includes('autónom') || d.includes('autonomo') || d.includes('persona física') ||
+    d.includes('persona fisica') || d.includes('entidad privada') ||
+    d.includes('sociedad') || d.includes('cooperativa'),
+  )
+  const hasStartup = descs.some(d =>
+    d.includes('startup') || d.includes('emprendedor') || d.includes('nueva empresa'),
+  )
+  const hasPublicOnly = !hasPrivate && descs.some(d =>
+    d.includes('administrac') || d.includes('entidad local') || d.includes('ayuntamiento') ||
+    d.includes('diputacion') || d.includes('diputación') || d.includes('comunidad autónoma') ||
+    d.includes('organismo público') || d.includes('universidad pública') || d.includes('universidad publica'),
+  )
+  const hasNonProfitOnly = !hasPrivate && descs.some(d =>
+    d.includes('fundac') || d.includes('asociac') || d.includes('sin ánimo de lucro') ||
+    d.includes('sin animo de lucro') || d.includes('ong') || d.includes('entidad sin fines'),
+  )
+
+  if (hasPublicOnly) tags.push('ben:administracion')
+  if (hasNonProfitOnly) tags.push('ben:fundacion')
+  if (hasPrivate) tags.push('ben:empresa')
+  if (hasStartup) tags.push('ben:startup')
+
+  return tags
+}
+
 function normalizeScope(v: string | null | undefined): 'nacional' | 'autonomico' | 'europeo' | 'municipal' {
   const s = (v ?? '').toUpperCase()
   if (s.includes('ESTATAL') || s.includes('NACIONAL')) return 'nacional'
@@ -167,6 +213,7 @@ function mapToRow(item: ConvocatoriaListItem, detail: ConvocatoriaDetail | null,
   const tags = [
     detail?.descripcionFinalidad?.toLowerCase() ?? null,
     (detail?.mrr || item.mrr) ? 'mrr' : null,
+    ...parseBeneficiaryTags(detail?.tiposBeneficiarios),
   ].filter((v): v is string => Boolean(v))
 
   const summary = detail?.descripcionFinalidad

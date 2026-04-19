@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import Script from "next/script";
+import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
-const inter = Inter({ subsets: ["latin"] });
+const geist = Geist({ subsets: ["latin"], variable: "--font-geist" });
+const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono" });
 
 export const metadata: Metadata = {
-  title: "Grantix — El Stripe de las Subvenciones",
+  title: "SmartLeading — Subvenciones en 72 horas",
   description: "Encuentra, solicita y justifica subvenciones públicas con IA. Tu empresa merece el dinero que ya existe.",
 };
 
@@ -15,8 +17,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="es" className="h-full">
-      <body className={`${inter.className} h-full bg-gray-50 antialiased`}>{children}</body>
+    <html lang="es" className={`h-full ${geist.variable} ${geistMono.variable}`}>
+      <body className="h-full antialiased">
+        <Script
+          src="https://t.contentsquare.net/uxa/157486111e4ab.js"
+          strategy="afterInteractive"
+        />
+        {children}
+      </body>
     </html>
   );
 }

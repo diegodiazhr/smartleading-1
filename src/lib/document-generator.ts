@@ -11,189 +11,143 @@ function getClient(): OpenAI {
   return _client
 }
 
-// ── Intake field definitions per document type ─────────────────────────────
+// ── Question types (AI-generated per grant/doc) ───────────────────���───────
 
-export interface IntakeField {
-  key: string
+export interface QuestionnaireQuestion {
+  id: string
   label: string
   type: 'text' | 'textarea' | 'number' | 'date' | 'select'
-  placeholder?: string
-  options?: { value: string; label: string }[]
   required: boolean
+  placeholder?: string
   hint?: string
-  prefill?: string  // key from company/grant context to auto-fill
+  options?: { value: string; label: string }[]
 }
 
-export const INTAKE_FIELDS: Record<DocumentType, IntakeField[]> = {
-  memoria_tecnica: [
-    {
-      key: 'proyecto_descripcion',
-      label: '¿Qué vas a hacer con esta subvención?',
-      type: 'textarea',
-      placeholder: 'Describe brevemente las acciones o inversiones concretas que vas a llevar a cabo. Ej: "Adquirir 3 servidores para digitalizar el proceso de facturación y contratar a un consultor para su implantación."',
-      required: true,
-      hint: 'Sé específico. Cuanto más detalle, mejor será el documento generado.',
-    },
-    {
-      key: 'proyecto_objetivo',
-      label: 'Objetivo principal del proyecto',
-      type: 'text',
-      placeholder: 'Ej: Reducir el tiempo de procesamiento de pedidos en un 40%',
-      required: true,
-    },
-    {
-      key: 'proyecto_plazo_meses',
-      label: 'Duración estimada del proyecto (meses)',
-      type: 'number',
-      placeholder: '12',
-      required: true,
-    },
-    {
-      key: 'proyecto_impacto',
-      label: '¿Qué impacto esperas conseguir?',
-      type: 'textarea',
-      placeholder: 'Ej: Creación de 2 puestos de trabajo, ahorro del 30% en costes operativos, mejora de la productividad...',
-      required: false,
-      hint: 'Incluye indicadores cuantificables si los tienes.',
-    },
-    {
-      key: 'proyecto_experiencia',
-      label: '¿Tienes experiencia previa en proyectos similares?',
-      type: 'textarea',
-      placeholder: 'Ej: En 2023 implantamos un ERP con éxito que redujo errores de inventario un 25%.',
-      required: false,
-    },
-  ],
-  declaracion_responsable: [
-    {
-      key: 'representante_nombre',
-      label: 'Nombre completo del representante legal',
-      type: 'text',
-      placeholder: 'Juan García Martínez',
-      required: true,
-    },
-    {
-      key: 'representante_dni',
-      label: 'DNI / NIE del representante',
-      type: 'text',
-      placeholder: '12345678A',
-      required: true,
-    },
-    {
-      key: 'representante_cargo',
-      label: 'Cargo del representante',
-      type: 'select',
-      options: [
-        { value: 'Administrador Único', label: 'Administrador Único' },
-        { value: 'Administrador Solidario', label: 'Administrador Solidario' },
-        { value: 'Administrador Mancomunado', label: 'Administrador Mancomunado' },
-        { value: 'Consejero Delegado', label: 'Consejero Delegado' },
-        { value: 'Apoderado', label: 'Apoderado' },
-        { value: 'Gerente', label: 'Gerente' },
-        { value: 'Presidente', label: 'Presidente' },
-      ],
-      required: true,
-    },
-  ],
-  plan_viabilidad: [
-    {
-      key: 'proyecto_descripcion',
-      label: 'Descripción del proyecto o inversión',
-      type: 'textarea',
-      placeholder: 'Describe el proyecto, producto o servicio que vas a desarrollar...',
-      required: true,
-    },
-    {
-      key: 'mercado_objetivo',
-      label: '¿A qué mercado o clientes va dirigido?',
-      type: 'textarea',
-      placeholder: 'Ej: PYMEs del sector industrial en España, con facturación entre 1M y 10M€',
-      required: true,
-    },
-    {
-      key: 'proyecto_plazo_meses',
-      label: 'Duración del proyecto (meses)',
-      type: 'number',
-      placeholder: '24',
-      required: true,
-    },
-    {
-      key: 'proyeccion_ingresos',
-      label: 'Proyección de ingresos estimada (€/año)',
-      type: 'number',
-      placeholder: '150000',
-      required: false,
-    },
-    {
-      key: 'proyecto_impacto',
-      label: 'Impacto esperado (empleos, ventas, eficiencia...)',
-      type: 'textarea',
-      placeholder: 'Ej: Creación de 5 empleos directos, incremento del 20% en ventas...',
-      required: false,
-    },
-  ],
-  descripcion_proyecto: [
-    {
-      key: 'proyecto_descripcion',
-      label: 'Describe el proyecto en detalle',
-      type: 'textarea',
-      placeholder: 'Explica qué vas a hacer, por qué y cómo...',
-      required: true,
-    },
-    {
-      key: 'proyecto_objetivo',
-      label: 'Objetivo principal',
-      type: 'text',
-      placeholder: 'Ej: Digitalizar el proceso de producción',
-      required: true,
-    },
-    {
-      key: 'proyecto_plazo_meses',
-      label: 'Duración estimada (meses)',
-      type: 'number',
-      placeholder: '12',
-      required: true,
-    },
-  ],
-  cronograma: [
-    {
-      key: 'proyecto_descripcion',
-      label: 'Fases o hitos principales del proyecto',
-      type: 'textarea',
-      placeholder: 'Ej: Fase 1 (meses 1-3): análisis y diseño. Fase 2 (meses 4-8): desarrollo. Fase 3 (meses 9-12): implantación y formación.',
-      required: true,
-    },
-    {
-      key: 'proyecto_plazo_meses',
-      label: 'Duración total (meses)',
-      type: 'number',
-      placeholder: '12',
-      required: true,
-    },
-  ],
-  presupuesto_detallado: [
-    {
-      key: 'proyecto_descripcion',
-      label: 'Conceptos de gasto a financiar',
-      type: 'textarea',
-      placeholder: 'Ej: - Equipamiento informático: 15.000€\n- Consultoría técnica: 8.000€\n- Licencias software: 2.000€\n- Formación: 1.000€',
-      required: true,
-      hint: 'Lista cada partida con su importe aproximado.',
-    },
-  ],
-  other_generated: [
-    {
-      key: 'proyecto_descripcion',
-      label: 'Información adicional para el documento',
-      type: 'textarea',
-      placeholder: 'Añade cualquier información relevante para generar este documento...',
-      required: true,
-    },
-  ],
-  external: [],
+export interface QuestionnaireContext {
+  documentName: string
+  documentType: DocumentType
+  templateHint?: string
+  grant: {
+    title: string
+    organismo: string | null
+    summary: string | null
+    body: string | null
+    grant_type: string
+    scope: string
+    budget_per_company_max: number | null
+    tags: string[]
+    requirements?: unknown
+  }
+  company: {
+    name: string
+    cif: string
+    region: string | null
+    municipality: string | null
+    employees_count: number
+    revenue_annual: number
+    founding_date: string | null
+    is_startup: boolean
+    has_rd: boolean
+    cnae_primary: string | null
+    cnae_secondary?: string[]
+    website: string | null
+  }
 }
 
-// ── Generation ─────────────────────────────────────────────────────────────
+export async function generateQuestionnaire(ctx: QuestionnaireContext): Promise<QuestionnaireQuestion[]> {
+  const client = getClient()
+
+  const foundingYear = ctx.company.founding_date
+    ? new Date(ctx.company.founding_date).getFullYear()
+    : null
+
+  const systemPrompt = `Eres un experto en solicitudes de subvenciones públicas españolas.
+Tu tarea es generar un cuestionario personalizado para que una empresa pueda completar un documento de subvención.
+
+REGLAS:
+1. Genera entre 5 y 12 preguntas específicas para ESTE documento y ESTA convocatoria
+2. No preguntes por datos que ya tienes del perfil de empresa
+3. Las preguntas deben obtener información real y específica, no genérica
+4. Ordena las preguntas de más a menos importante
+5. Para declaraciones responsables: pide datos del representante legal
+6. Para memorias técnicas: enfócate en el proyecto específico, metodología, resultados medibles
+7. Para presupuestos: pide partidas concretas con importes
+8. Para planes de viabilidad: pide proyecciones reales, mercado objetivo, competencia
+9. Devuelve SOLO un array JSON válido con la estructura indicada`
+
+  const userPrompt = `Genera el cuestionario para el siguiente documento:
+
+DOCUMENTO: ${ctx.documentName}
+TIPO: ${ctx.documentType}
+${ctx.templateHint ? `ESTRUCTURA REQUERIDA: ${ctx.templateHint}` : ''}
+
+CONVOCATORIA:
+- Título: ${ctx.grant.title}
+- Organismo: ${ctx.grant.organismo ?? 'No especificado'}
+- Tipo de ayuda: ${ctx.grant.grant_type} · ${ctx.grant.scope}
+- Importe máximo: ${ctx.grant.budget_per_company_max ? `${ctx.grant.budget_per_company_max.toLocaleString('es-ES')} €` : 'No especificado'}
+- Descripción: ${ctx.grant.summary ?? ''}
+- Texto oficial: ${ctx.grant.body?.slice(0, 1200) ?? '(no disponible)'}
+
+DATOS YA DISPONIBLES DE LA EMPRESA (NO preguntar por estos):
+- Nombre: ${ctx.company.name}
+- CIF: ${ctx.company.cif}
+- Región: ${ctx.company.region ?? 'No especificada'}
+- Municipio: ${ctx.company.municipality ?? 'No especificado'}
+- Empleados: ${ctx.company.employees_count}
+- Facturación anual: ${ctx.company.revenue_annual.toLocaleString('es-ES')} €
+- Año de constitución: ${foundingYear ?? 'No especificado'}
+- Startup: ${ctx.company.is_startup ? 'Sí' : 'No'}
+- I+D: ${ctx.company.has_rd ? 'Sí' : 'No'}
+- CNAE principal: ${ctx.company.cnae_primary ?? 'No especificado'}
+- Web: ${ctx.company.website ?? 'No especificada'}
+
+Devuelve EXACTAMENTE este formato JSON (array, sin texto adicional):
+[
+  {
+    "id": "clave_unica_sin_espacios",
+    "label": "Pregunta en español",
+    "type": "textarea",
+    "required": true,
+    "placeholder": "Ejemplo de respuesta...",
+    "hint": "Explicación o consejo opcional"
+  }
+]
+
+Tipos disponibles: text, textarea, number, date, select (incluir "options" si es select).`
+
+  const response = await client.chat.completions.create({
+    model: 'gpt-4o-mini',
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt },
+    ],
+    response_format: { type: 'json_object' },
+    temperature: 0.3,
+    max_tokens: 2000,
+  })
+
+  const raw = response.choices[0]?.message?.content ?? '{}'
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    throw new Error('Invalid JSON from questionnaire AI')
+  }
+
+  // Handle both { questions: [...] } and direct array
+  const questions = Array.isArray(parsed)
+    ? parsed
+    : (parsed as Record<string, unknown>).questions ?? (parsed as Record<string, unknown>).cuestionario ?? []
+
+  if (!Array.isArray(questions) || questions.length === 0) {
+    throw new Error('No questions returned from AI')
+  }
+
+  return questions as QuestionnaireQuestion[]
+}
+
+// ── Document generation ────────────────────────────────────────────────────
 
 export interface GenerationContext {
   documentName: string
@@ -226,19 +180,23 @@ export interface GenerationContext {
   }
   requestedAmount: number | null
   intake: Record<string, string | number>
+  questions?: QuestionnaireQuestion[]
 }
 
-const DOC_SYSTEM_PROMPT = `Eres un experto redactor de documentación para solicitudes de subvenciones públicas españolas.
-Redactas documentos formales, completos y correctos que cumplen exactamente con lo que pide la convocatoria.
+const DOC_SYSTEM_PROMPT = `Eres un experto redactor de documentación para solicitudes de subvenciones públicas españolas con 15 años de experiencia.
+Redactas documentos formales, completos y de alta calidad que maximizan las posibilidades de aprobación.
 
-REGLAS ABSOLUTAS:
-1. Genera SOLO el documento solicitado — ni más ni menos secciones que las indicadas
-2. Usa el tono formal y técnico propio de la administración pública española
-3. Rellena TODOS los datos con la información real de la empresa que se te proporciona
-4. Si la convocatoria especifica secciones exactas, respétalas al 100%
-5. El documento debe estar COMPLETO y listo para presentar (con la información proporcionada)
-6. Usa Markdown para el formato: ## para secciones, **negrita** para datos clave, listas con -
-7. Incluye siempre: cabecera con nombre empresa + convocatoria, cuerpo del documento, pie con lugar/fecha/firma`
+REGLAS ABSOLUTAS — NUNCA LAS INCUMPLAS:
+1. NUNCA inventes información, datos, nombres, fechas, importes ni estadísticas
+2. Si una sección necesita información que NO se te ha proporcionado, escribe exactamente: [INFORMACIÓN PENDIENTE: describe aquí qué dato falta y por qué es necesario]
+3. Usa SOLO los datos reales proporcionados en este prompt
+4. Tono formal y técnico propio de la administración pública española
+5. El documento debe tener MÍNIMO 700 palabras para memorias técnicas y planes de viabilidad
+6. Para declaraciones responsables: mínimo 3 secciones formales completas
+7. Para presupuestos: incluir tabla detallada con todas las partidas proporcionadas
+8. Usa Markdown: ## para secciones principales, ### para subsecciones, **negrita** para datos clave
+9. Incluye siempre: cabecera formal (empresa + convocatoria + fecha), desarrollo completo del documento, pie con lugar/fecha/firma
+10. Donde el usuario haya dado datos específicos, úsalos literalmente — no parafrasees`
 
 export async function generateDocument(ctx: GenerationContext): Promise<string> {
   const client = getClient()
@@ -251,59 +209,76 @@ export async function generateDocument(ctx: GenerationContext): Promise<string> 
     ? new Date(ctx.company.founding_date).getFullYear()
     : 'No especificado'
 
+  // Build intake text using question labels for better context
   const intakeText = Object.entries(ctx.intake)
     .filter(([, v]) => v !== '' && v !== null && v !== undefined)
-    .map(([k, v]) => `${k}: ${v}`)
-    .join('\n')
+    .map(([k, v]) => {
+      const question = ctx.questions?.find(q => q.id === k)
+      const label = question?.label ?? k
+      return `**${label}**\n${v}`
+    })
+    .join('\n\n')
 
-  const userPrompt = `Genera el siguiente documento para una solicitud de subvención:
+  const userPrompt = `Genera el siguiente documento completo para una solicitud de subvención:
 
-DOCUMENTO A GENERAR: ${ctx.documentName}
-TIPO: ${ctx.documentType}
-ESTRUCTURA/SECCIONES REQUERIDAS: ${ctx.templateHint || 'Estructura estándar para este tipo de documento en subvenciones españolas'}
-
----
-DATOS DE LA CONVOCATORIA:
-- Título: ${ctx.grant.title}
-- Organismo convocante: ${ctx.grant.organismo ?? 'No especificado'}
-- Tipo de ayuda: ${ctx.grant.grant_type} · ${ctx.grant.scope}
-- Plazo solicitud: ${deadline}
-- Importe solicitado: ${ctx.requestedAmount ? `${ctx.requestedAmount.toLocaleString('es-ES')} €` : 'Por determinar'}
-- Descripción: ${ctx.grant.summary ?? ''}
-- Texto oficial: ${ctx.grant.body?.slice(0, 800) ?? ''}
+## DOCUMENTO A GENERAR
+- Nombre: ${ctx.documentName}
+- Tipo: ${ctx.documentType}
+- Secciones requeridas: ${ctx.templateHint || 'Estructura estándar para este tipo de documento en subvenciones públicas españolas'}
 
 ---
-DATOS DE LA EMPRESA:
-- Nombre: ${ctx.company.name}
-- CIF: ${ctx.company.cif}
-- Comunidad Autónoma: ${ctx.company.region ?? 'No especificada'}
-- Municipio: ${ctx.company.municipality ?? 'No especificado'}
-- Empleados: ${ctx.company.employees_count}
-- Facturación anual: ${ctx.company.revenue_annual.toLocaleString('es-ES')} €
-- Año de constitución: ${foundingYear}
-- Startup: ${ctx.company.is_startup ? 'Sí' : 'No'}
-- I+D: ${ctx.company.has_rd ? 'Sí' : 'No'}
-- CNAE: ${ctx.company.cnae_primary ?? 'No especificado'}
-- Web: ${ctx.company.website ?? 'No especificada'}
+
+## DATOS DE LA CONVOCATORIA
+- **Título**: ${ctx.grant.title}
+- **Organismo convocante**: ${ctx.grant.organismo ?? '[INFORMACIÓN PENDIENTE: nombre del organismo convocante]'}
+- **Tipo de ayuda**: ${ctx.grant.grant_type} · ámbito ${ctx.grant.scope}
+- **Plazo de solicitud**: ${deadline}
+- **Importe solicitado**: ${ctx.requestedAmount ? `${ctx.requestedAmount.toLocaleString('es-ES')} €` : '[INFORMACIÓN PENDIENTE: importe a solicitar]'}
+- **Importe máximo disponible**: ${ctx.grant.budget_per_company_max ? `${ctx.grant.budget_per_company_max.toLocaleString('es-ES')} €` : 'No especificado'}
+- **Resumen**: ${ctx.grant.summary ?? '(no disponible)'}
+- **Texto oficial de la convocatoria**:
+${ctx.grant.body?.slice(0, 1500) ?? '(no disponible)'}
 
 ---
-INFORMACIÓN ADICIONAL APORTADA POR LA EMPRESA:
-${intakeText || '(Sin información adicional)'}
+
+## DATOS DE LA EMPRESA
+- **Razón social**: ${ctx.company.name}
+- **CIF**: ${ctx.company.cif}
+- **Comunidad Autónoma**: ${ctx.company.region ?? '[INFORMACIÓN PENDIENTE: comunidad autónoma]'}
+- **Municipio**: ${ctx.company.municipality ?? 'No especificado'}
+- **Número de empleados**: ${ctx.company.employees_count}
+- **Facturación anual**: ${ctx.company.revenue_annual.toLocaleString('es-ES')} €
+- **Año de constitución**: ${foundingYear}
+- **Es startup**: ${ctx.company.is_startup ? 'Sí' : 'No'}
+- **Realiza I+D**: ${ctx.company.has_rd ? 'Sí' : 'No'}
+- **CNAE principal**: ${ctx.company.cnae_primary ?? 'No especificado'}
+- **Página web**: ${ctx.company.website ?? 'No especificada'}
 
 ---
-Genera el documento completo en Markdown, listo para presentar. Incluye todos los apartados especificados y usa los datos reales de la empresa. El documento debe ser formal, técnico y convincente.`
+
+## INFORMACIÓN APORTADA POR LA EMPRESA
+${intakeText || '[INFORMACIÓN PENDIENTE: el usuario no ha completado el cuestionario]'}
+
+---
+
+## INSTRUCCIONES FINALES
+Genera el documento COMPLETO en Markdown.
+- Usa los datos reales de la empresa en cada sección
+- Donde falte información, usa el marcador [INFORMACIÓN PENDIENTE: describe qué falta]
+- El documento debe ser formal, técnico, convincente y directamente presentable
+- No incluyas comentarios ni notas meta-textuales fuera del documento`
 
   const response = await client.chat.completions.create({
-    model: 'gpt-4o-mini',
+    model: 'gpt-4o',
     messages: [
       { role: 'system', content: DOC_SYSTEM_PROMPT },
       { role: 'user', content: userPrompt },
     ],
-    temperature: 0.3,
-    max_tokens: 3000,
+    temperature: 0.2,
+    max_tokens: 6000,
   })
 
   const content = response.choices[0]?.message?.content
-  if (!content) throw new Error('Empty response from OpenAI')
+  if (!content) throw new Error('Empty response from AI')
   return content
 }

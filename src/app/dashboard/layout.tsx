@@ -19,32 +19,40 @@ export default async function DashboardLayout({
 
   if (!user) redirect('/login')
 
-  // Check if user has a company profile; if not, redirect to onboarding
   const admin = createAdminClient()
   const { data: userRecord } = await admin
     .from('users')
-    .select('organization_id')
+    .select('organization_id, role')
     .eq('id', user.id)
     .single()
 
-  if (!userRecord?.organization_id) {
-    redirect('/onboarding')
-  }
+  // Platform admin users can only access the admin panel
+  if (userRecord?.role === 'admin' && !userRecord?.organization_id) redirect('/admin')
+
+  if (!userRecord?.organization_id) redirect('/onboarding')
 
   const { data: company } = await admin
     .from('companies')
-    .select('id')
+    .select('id, name, cif')
     .eq('organization_id', userRecord.organization_id)
     .maybeSingle()
 
-  if (!company) {
-    redirect('/onboarding')
-  }
+  if (!company) redirect('/onboarding')
+
+  const { data: userDetails } = await admin
+    .from('users')
+    .select('is_superadmin')
+    .eq('id', user.id)
+    .single()
 
   return (
-    <div className="flex h-screen overflow-hidden">
-      <Sidebar />
-      <main className="flex-1 flex flex-col overflow-hidden">
+    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
+      <Sidebar
+        companyName={company.name}
+        companyCif={company.cif}
+        isSuperAdmin={userDetails?.is_superadmin ?? false}
+      />
+      <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         {children}
       </main>
     </div>

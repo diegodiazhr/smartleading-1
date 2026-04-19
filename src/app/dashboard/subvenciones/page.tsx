@@ -11,19 +11,14 @@ export default async function SubvencionesPage() {
 
   const { data: { user } } = await supabase.auth.getUser()
 
-  const [{ data: grants }, syncStatus, matchesResult] = await Promise.all([
-    supabase
-      .from('grants')
-      .select('*')
-      .order('deadline', { ascending: true })
-      .limit(500),
+  const [syncStatus, matchesResult] = await Promise.all([
     getBdnsSyncStatus(),
     user
       ? admin.from('users').select('organization_id').eq('id', user.id).single()
       : Promise.resolve({ data: null }),
   ])
 
-  let matchMap: Record<string, { eligibility_score: number; potential_amount: number | null }> = {}
+  let matchCount = 0
 
   if (matchesResult?.data?.organization_id) {
     const { data: company } = await admin
@@ -33,34 +28,27 @@ export default async function SubvencionesPage() {
       .single()
 
     if (company?.id) {
-      const { data: matches } = await admin
+      const { count } = await admin
         .from('company_grant_matches')
-        .select('grant_id, eligibility_score, potential_amount')
+        .select('*', { count: 'exact', head: true })
         .eq('company_id', company.id)
+        .gte('eligibility_score', 40)
 
-      if (matches) {
-        for (const m of matches) {
-          matchMap[m.grant_id] = {
-            eligibility_score: m.eligibility_score ?? 0,
-            potential_amount: m.potential_amount ?? null,
-          }
-        }
-      }
+      matchCount = count ?? 0
     }
   }
 
   return (
-    <div className="flex flex-col h-full overflow-auto">
-      <Header
-        title="Subvenciones"
-        subtitle="Explora todas las convocatorias activas"
-      />
-      <div className="flex-1 p-6 space-y-4">
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <Header title="Subvenciones" subtitle="Explora todas las convocatorias activas" />
+      <div style={{ flex: 1, overflowY: 'auto', padding: '24px 28px 48px' }}>
         <BdnsSyncPanel
           lastSyncAt={syncStatus.lastSyncAt}
           totalGrants={syncStatus.totalGrants}
         />
-        <GrantBrowser initialGrants={grants ?? []} matchMap={matchMap} />
+        <div style={{ marginTop: 16 }}>
+          <GrantBrowser hasMatches={matchCount > 0} matchCount={matchCount} />
+        </div>
       </div>
     </div>
   )

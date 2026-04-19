@@ -52,12 +52,22 @@ export default async function ExpedienteDetailPage({ params }: { params: Promise
     grant = grantResult.data
   }
 
+  // Load company name for document generation
+  const admin = (await import('@/lib/supabase/admin')).createAdminClient()
+  const { data: userRecord } = await (await import('@/lib/supabase/server')).createClient()
+    .then(s => s.auth.getUser())
+    .then(({ data: { user } }) => admin.from('users').select('organization_id').eq('id', user!.id).single())
+  const { data: companyData } = userRecord?.organization_id
+    ? await admin.from('companies').select('name').eq('organization_id', userRecord.organization_id).single()
+    : { data: null }
+
   const { label, color } = statusLabel(application.status)
   const justDays = daysUntil(application.justification_deadline)
 
   const meta = (application.metadata ?? {}) as Record<string, unknown>
   const guide = meta.guide_status === 'ready' ? (meta.guide as ApplicationGuide) : null
   const completedItems = (meta.completed_items ?? []) as string[]
+  const generatedDocs = (meta.generated_docs ?? {}) as Record<string, { content: string; document_name: string; generated_at: string; version: number; edited_at?: string }>
   const { label: urgLabel, color: urgColor } = urgencyLabel(justDays)
 
   const currentStatusIdx = STATUS_ORDER.indexOf(application.status)
@@ -142,8 +152,10 @@ export default async function ExpedienteDetailPage({ params }: { params: Promise
             {guide ? (
               <ApplicationGuideComponent
                 applicationId={application.id}
+                companyName={companyData?.name ?? ''}
                 guide={guide}
                 completedItems={completedItems}
+                generatedDocs={generatedDocs}
               />
             ) : meta.guide_status === 'failed' ? (
               <Card className="border-amber-200 bg-amber-50">

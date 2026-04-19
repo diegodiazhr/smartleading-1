@@ -2,6 +2,7 @@
 
 import { useState, useOptimistic, useTransition } from 'react'
 import type { ApplicationGuide, GuideStep, GuideDocument } from '@/lib/application-guide'
+import DocumentGeneratorPanel from './document-generator-panel'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   CheckCircle2,
@@ -32,13 +33,23 @@ const STEP_COLORS: Record<string, string> = {
   verification: 'text-emerald-600 bg-emerald-50 border-emerald-200',
 }
 
-interface Props {
-  applicationId: string
-  guide: ApplicationGuide
-  completedItems: string[]
+interface StoredDoc {
+  content: string
+  document_name: string
+  generated_at: string
+  version: number
+  edited_at?: string
 }
 
-export default function ApplicationGuideComponent({ applicationId, guide, completedItems: initial }: Props) {
+interface Props {
+  applicationId: string
+  companyName: string
+  guide: ApplicationGuide
+  completedItems: string[]
+  generatedDocs: Record<string, StoredDoc>
+}
+
+export default function ApplicationGuideComponent({ applicationId, companyName, guide, completedItems: initial, generatedDocs }: Props) {
   const [, startTransition] = useTransition()
   const [optimisticCompleted, setOptimisticCompleted] = useOptimistic(initial)
   const [expandedStep, setExpandedStep] = useState<string | null>(null)
@@ -186,6 +197,9 @@ export default function ApplicationGuideComponent({ applicationId, guide, comple
               doc={doc}
               completed={optimisticCompleted.includes(doc.id)}
               onToggle={() => toggle(doc.id)}
+              applicationId={applicationId}
+              companyName={companyName}
+              storedDoc={generatedDocs[doc.id] ?? null}
             />
           ))}
         </div>
@@ -274,37 +288,67 @@ function DocumentCard({
   doc,
   completed,
   onToggle,
+  applicationId,
+  companyName,
+  storedDoc,
 }: {
   doc: GuideDocument
   completed: boolean
   onToggle: () => void
+  applicationId: string
+  companyName: string
+  storedDoc: StoredDoc | null
 }) {
+  const isGeneratable = doc.source === 'ai_generated'
+
   return (
-    <div className={`rounded-lg border p-3 flex items-start gap-3 transition-all ${
-      completed ? 'border-gray-200 bg-gray-50 opacity-75' : 'border-gray-200 bg-white hover:border-indigo-200'
+    <div className={`rounded-lg border transition-all ${
+      completed ? 'border-gray-200 bg-gray-50' : isGeneratable ? 'border-indigo-100 bg-white hover:border-indigo-200' : 'border-gray-200 bg-white hover:border-gray-300'
     }`}>
-      <button onClick={onToggle} className="mt-0.5 shrink-0 transition-transform hover:scale-110">
-        {completed
-          ? <CheckCircle2 className="w-5 h-5 text-emerald-500" />
-          : <Circle className="w-5 h-5 text-gray-300 hover:text-indigo-400" />
-        }
-      </button>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <p className={`text-sm font-medium ${completed ? 'line-through text-gray-400' : 'text-gray-900'}`}>
-            {doc.name}
-          </p>
-          {!doc.required && <span className="text-xs text-gray-400 italic">opcional</span>}
-          {doc.format && (
-            <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">{doc.format}</span>
+      <div className="p-3 flex items-start gap-3">
+        <button onClick={onToggle} className="mt-0.5 shrink-0 transition-transform hover:scale-110">
+          {completed
+            ? <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+            : <Circle className="w-5 h-5 text-gray-300 hover:text-indigo-400" />
+          }
+        </button>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className={`text-sm font-medium ${completed ? 'line-through text-gray-400' : 'text-gray-900'}`}>
+              {doc.name}
+            </p>
+            {!doc.required && <span className="text-xs text-gray-400 italic">opcional</span>}
+            {doc.format && (
+              <span className="text-xs bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">{doc.format}</span>
+            )}
+            {isGeneratable && (
+              <span className="text-xs bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded font-medium flex items-center gap-0.5">
+                <Sparkles className="w-3 h-3" />
+                IA
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-gray-500 mt-0.5">{doc.description}</p>
+          {!isGeneratable && (
+            <p className="text-xs text-indigo-600 mt-1 flex items-center gap-1">
+              <BookOpen className="w-3 h-3" />
+              {doc.where_to_get}
+            </p>
           )}
         </div>
-        <p className="text-xs text-gray-500 mt-0.5">{doc.description}</p>
-        <p className="text-xs text-indigo-600 mt-1 flex items-center gap-1">
-          <BookOpen className="w-3 h-3" />
-          {doc.where_to_get}
-        </p>
       </div>
+
+      {/* AI generator panel — only for generatable docs */}
+      {isGeneratable && (
+        <div className="px-3 pb-3">
+          <DocumentGeneratorPanel
+            applicationId={applicationId}
+            companyName={companyName}
+            doc={doc}
+            stored={storedDoc}
+          />
+        </div>
+      )}
     </div>
   )
 }

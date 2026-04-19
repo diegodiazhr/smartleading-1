@@ -21,6 +21,16 @@ export interface GuideStep {
   required: boolean
 }
 
+export type DocumentType =
+  | 'memoria_tecnica'
+  | 'declaracion_responsable'
+  | 'plan_viabilidad'
+  | 'descripcion_proyecto'
+  | 'cronograma'
+  | 'presupuesto_detallado'
+  | 'other_generated'
+  | 'external'
+
 export interface GuideDocument {
   id: string
   name: string
@@ -28,6 +38,9 @@ export interface GuideDocument {
   where_to_get: string
   format?: string
   required: boolean
+  source: 'ai_generated' | 'external'
+  document_type?: DocumentType
+  template_hint?: string
 }
 
 export interface ApplicationGuide {
@@ -130,9 +143,12 @@ Genera una guía de presentación REALISTA y ESPECÍFICA para esta subvención y
       "id": "doc-1",
       "name": "Nombre del documento",
       "description": "Para qué sirve y qué debe contener",
-      "where_to_get": "Dónde y cómo obtenerlo",
+      "where_to_get": "Dónde y cómo obtenerlo (o 'Elaborar internamente' si lo redacta la empresa)",
       "format": "PDF / Original / etc.",
-      "required": true
+      "required": true,
+      "source": "ai_generated | external",
+      "document_type": "memoria_tecnica | declaracion_responsable | plan_viabilidad | descripcion_proyecto | cronograma | presupuesto_detallado | other_generated | external",
+      "template_hint": "Solo para source=ai_generated: secciones exactas o estructura que pide la convocatoria para este documento"
     }
   ],
   "warnings": ["Aviso importante 1", "Aviso importante 2"],
@@ -145,7 +161,13 @@ IMPORTANTE:
 - Mínimo 5 pasos, máximo 10
 - Mínimo 5 documentos, máximo 12
 - Mínimo 2 avisos importantes
-- Todo en español, tono profesional pero claro`
+- Todo en español, tono profesional pero claro
+
+CLASIFICACIÓN DE DOCUMENTOS (source):
+- source="external": certificados oficiales (AEAT, SS, Registro Mercantil), escrituras, DNI, cuentas anuales, cualquier doc que la empresa deba obtener de organismos externos
+- source="ai_generated": memorias técnicas, declaraciones responsables, planes de viabilidad, descripciones de proyecto, cronogramas, presupuestos detallados — cualquier documento que la empresa redacta ella misma
+- Para source="ai_generated", el campo template_hint debe describir exactamente qué secciones/apartados pide la convocatoria para ese documento específico (basándote en el body/requirements de la subvención). Si la convocatoria no especifica estructura, indica la estructura estándar para ese tipo de documento en subvenciones españolas.
+- document_type debe ser uno de: memoria_tecnica, declaracion_responsable, plan_viabilidad, descripcion_proyecto, cronograma, presupuesto_detallado, other_generated, external`
 
   const response = await client.chat.completions.create({
     model: 'gpt-4o-mini',

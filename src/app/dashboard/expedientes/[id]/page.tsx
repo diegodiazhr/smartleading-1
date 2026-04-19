@@ -4,6 +4,9 @@ import Header from '@/components/dashboard/header'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import StatusPanel from '@/components/applications/status-panel'
+import ApplicationGuideComponent from '@/components/applications/application-guide'
+import type { ApplicationGuide } from '@/lib/application-guide'
 import Link from 'next/link'
 import {
   ArrowLeft,
@@ -13,6 +16,7 @@ import {
   Receipt,
   ChevronRight,
   CalendarDays,
+  AlertTriangle,
 } from 'lucide-react'
 import { formatCurrency, formatDate, statusLabel, daysUntil, urgencyLabel } from '@/lib/utils'
 
@@ -49,8 +53,11 @@ export default async function ExpedienteDetailPage({ params }: { params: Promise
   }
 
   const { label, color } = statusLabel(application.status)
-  const company = null
   const justDays = daysUntil(application.justification_deadline)
+
+  const meta = (application.metadata ?? {}) as Record<string, unknown>
+  const guide = meta.guide_status === 'ready' ? (meta.guide as ApplicationGuide) : null
+  const completedItems = (meta.completed_items ?? []) as string[]
   const { label: urgLabel, color: urgColor } = urgencyLabel(justDays)
 
   const currentStatusIdx = STATUS_ORDER.indexOf(application.status)
@@ -130,6 +137,22 @@ export default async function ExpedienteDetailPage({ params }: { params: Promise
                 </div>
               </CardContent>
             </Card>
+
+            {/* AI Guide */}
+            {guide ? (
+              <ApplicationGuideComponent
+                applicationId={application.id}
+                guide={guide}
+                completedItems={completedItems}
+              />
+            ) : meta.guide_status === 'failed' ? (
+              <Card className="border-amber-200 bg-amber-50">
+                <CardContent className="p-4 flex items-center gap-3 text-sm text-amber-800">
+                  <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600" />
+                  No se pudo generar la guía de presentación automática. Comprueba que la clave de OpenAI está configurada.
+                </CardContent>
+              </Card>
+            ) : null}
 
             {/* Events */}
             {(events || []).length > 0 && (
@@ -253,6 +276,13 @@ export default async function ExpedienteDetailPage({ params }: { params: Promise
                 )}
               </CardContent>
             </Card>
+
+            <StatusPanel
+              applicationId={application.id}
+              currentStatus={application.status}
+              approvedAmount={application.approved_amount}
+              referenceNumber={application.reference_number}
+            />
 
             {application.status === 'pending_justification' && (
               <Link href={`/dashboard/justificacion?appId=${application.id}`} className="block">

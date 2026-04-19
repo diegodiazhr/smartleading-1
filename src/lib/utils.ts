@@ -37,6 +37,12 @@ export function urgencyLabel(days: number | null): { label: string; color: strin
   return { label: `${days}d`, color: 'text-emerald-500' }
 }
 
+export function daysUntilOpen(date: string | null | undefined): number | null {
+  if (!date) return null
+  const diff = new Date(date).getTime() - new Date().getTime()
+  return Math.ceil(diff / (1000 * 60 * 60 * 24))
+}
+
 export function scoreColor(score: number): string {
   if (score >= 80) return 'text-emerald-600'
   if (score >= 60) return 'text-amber-600'

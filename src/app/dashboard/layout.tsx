@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import Sidebar from '@/components/dashboard/sidebar'
 
 export default async function DashboardLayout({
@@ -10,8 +11,28 @@ export default async function DashboardLayout({
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  if (!user) {
-    redirect('/login')
+  if (!user) redirect('/login')
+
+  // Check if user has a company profile; if not, redirect to onboarding
+  const admin = createAdminClient()
+  const { data: userRecord } = await admin
+    .from('users')
+    .select('organization_id')
+    .eq('id', user.id)
+    .single()
+
+  if (!userRecord?.organization_id) {
+    redirect('/onboarding')
+  }
+
+  const { data: company } = await admin
+    .from('companies')
+    .select('id')
+    .eq('organization_id', userRecord.organization_id)
+    .single()
+
+  if (!company) {
+    redirect('/onboarding')
   }
 
   return (

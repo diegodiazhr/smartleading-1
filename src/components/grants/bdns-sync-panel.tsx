@@ -66,7 +66,7 @@ export default function BdnsSyncPanel({ lastSyncAt, totalGrants }: Props) {
       const res = await fetch('/api/admin/sync-bdns', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ maxPagesPerVpd: 5 }),
+        body: JSON.stringify({}),
       })
       const data = await res.json() as SyncResponse
 
@@ -130,7 +130,7 @@ export default function BdnsSyncPanel({ lastSyncAt, totalGrants }: Props) {
 
         {loading && (
           <p className="text-xs text-indigo-600 mt-3">
-            Importando subvenciones de infosubvenciones.es — puede tardar entre 1 y 5 minutos…
+            Importando ~1.000 subvenciones desde la BDNS — puede tardar entre 3 y 8 minutos…
           </p>
         )}
 

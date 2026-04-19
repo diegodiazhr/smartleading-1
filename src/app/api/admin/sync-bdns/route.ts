@@ -31,7 +31,7 @@ export async function POST(request: Request) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  let body: { vpds?: string[]; maxPagesPerVpd?: number } = {}
+  let body: { vpds?: string[]; maxPagesPerVpd?: number; pageSize?: number } = {}
   try {
     body = await request.json()
   } catch {
@@ -41,7 +41,8 @@ export async function POST(request: Request) {
   try {
     const stats = await syncBDNS({
       vpds: body.vpds,
-      maxPagesPerVpd: body.maxPagesPerVpd ?? 5,
+      maxPagesPerVpd: body.maxPagesPerVpd, // uses lib default (20) when undefined
+      pageSize: body.pageSize,             // uses lib default (50) when undefined
     })
     return Response.json({ ok: true, stats })
   } catch (err) {

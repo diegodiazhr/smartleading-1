@@ -7,31 +7,11 @@ const BASE_URL = (
 ).replace(/\/+$/, '')
 
 // VPD = Portal identifier in the BDNS system.
-// GE (Administración General del Estado) is the national portal and contains grants
-// from all administrative levels (nacional, autonómico, municipal, europeo).
-// CCAA codes below follow standard Spanish administrative abbreviations — some portals
-// may not be active; inactive ones are automatically skipped during sync.
+// GE is the master portal (Administración General del Estado) and aggregates ALL grants
+// from every level: nacional, autonómico, local, and europeo. Individual CCAA VPD codes
+// are not exposed publicly via the API — GE is the single source of truth.
 export const SPAIN_VPDS = [
-  { code: 'GE', name: 'Administración General del Estado' },
-  { code: 'AN', name: 'Junta de Andalucía' },
-  { code: 'AR', name: 'Gobierno de Aragón' },
-  { code: 'AS', name: 'Principado de Asturias' },
-  { code: 'IB', name: 'Govern de les Illes Balears' },
-  { code: 'CN', name: 'Gobierno de Canarias' },
-  { code: 'CB', name: 'Gobierno de Cantabria' },
-  { code: 'CL', name: 'Junta de Castilla y León' },
-  { code: 'CM', name: 'Junta de Comunidades de Castilla-La Mancha' },
-  { code: 'CT', name: 'Generalitat de Catalunya' },
-  { code: 'EX', name: 'Junta de Extremadura' },
-  { code: 'GA', name: 'Xunta de Galicia' },
-  { code: 'MD', name: 'Comunidad de Madrid' },
-  { code: 'MC', name: 'Comunidad Autónoma de la Región de Murcia' },
-  { code: 'NA', name: 'Gobierno de Navarra' },
-  { code: 'PV', name: 'Gobierno Vasco' },
-  { code: 'RI', name: 'Gobierno de La Rioja' },
-  { code: 'VC', name: 'Generalitat Valenciana' },
-  { code: 'CE', name: 'Ciudad Autónoma de Ceuta' },
-  { code: 'ML', name: 'Ciudad Autónoma de Melilla' },
+  { code: 'GE', name: 'Base de Datos Nacional de Subvenciones (BDNS)' },
 ]
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -76,11 +56,11 @@ interface ConvocatoriaListResponse {
 export interface SyncOptions {
   /** VPD codes to sync. Defaults to all SPAIN_VPDS. */
   vpds?: string[]
-  /** Max pages fetched per VPD. Defaults to 5 (5×30 = 150 grants per VPD). */
+  /** Max pages fetched per VPD. Defaults to 20 (20×50 = 1.000 grants). */
   maxPagesPerVpd?: number
-  /** Grants per page (1–30). Defaults to 30. */
+  /** Grants per page (1–50). Defaults to 50. */
   pageSize?: number
-  /** Milliseconds between page requests per VPD. Defaults to 300. */
+  /** Milliseconds between page requests per VPD. Defaults to 200. */
   delayBetweenPagesMs?: number
 }
 
@@ -312,9 +292,9 @@ export async function syncBDNS(options: SyncOptions = {}): Promise<SyncStats> {
 
   const opts: Required<SyncOptions> = {
     vpds: vpdsToSync.map(v => v.code),
-    maxPagesPerVpd: options.maxPagesPerVpd ?? 5,
-    pageSize: Math.min(30, Math.max(1, options.pageSize ?? 30)),
-    delayBetweenPagesMs: options.delayBetweenPagesMs ?? 300,
+    maxPagesPerVpd: options.maxPagesPerVpd ?? 20,
+    pageSize: Math.min(50, Math.max(1, options.pageSize ?? 50)),
+    delayBetweenPagesMs: options.delayBetweenPagesMs ?? 200,
   }
 
   const startedAt = new Date().toISOString()

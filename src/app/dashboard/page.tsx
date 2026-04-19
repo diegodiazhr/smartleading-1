@@ -17,6 +17,7 @@ import {
   Zap,
   Sparkles,
 } from 'lucide-react'
+import { redirect } from 'next/navigation'
 import { formatCurrency, formatDate, daysUntil, urgencyLabel, statusLabel } from '@/lib/utils'
 import type { GrantMatch } from '@/lib/types'
 
@@ -24,13 +25,15 @@ export default async function DashboardPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
+  if (!user) redirect('/login')
+
   const admin = createAdminClient()
 
   // Get company for matched grants
   const { data: userRecord } = await admin
     .from('users')
     .select('organization_id')
-    .eq('id', user!.id)
+    .eq('id', user.id)
     .single()
 
   const { data: company } = userRecord?.organization_id

@@ -135,7 +135,7 @@ export default function CompanyWizard() {
       has_rd: form.has_rd,
       export_percentage: Number(form.export_percentage) || 0,
       digitalization_level: 3,
-      innovation_level: form.has_rd ? 7 : 3,
+      innovation_level: form.has_rd ? 5 : 3,
       sustainability_score: 3,
       has_tax_debts: form.has_tax_debts,
       has_social_security_debts: form.has_social_security_debts,

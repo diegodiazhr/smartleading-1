@@ -1,7 +1,7 @@
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
-import { LayoutDashboard, RefreshCw, Building2, Users, ArrowLeft, LogOut } from 'lucide-react'
+import { LayoutDashboard, RefreshCw, Building2, Users, Upload, ArrowLeft, LogOut } from 'lucide-react'
 import { Dock } from '@/components/ui/dock-two'
 import { createClient } from '@/lib/supabase/client'
 
@@ -39,6 +39,12 @@ export function AdminDock({ showBackToDashboard }: { showBackToDashboard: boolea
       label: 'Usuarios',
       active: pathname.startsWith('/admin/usuarios'),
       onClick: () => router.push('/admin/usuarios'),
+    },
+    {
+      icon: Upload,
+      label: 'Importar',
+      active: pathname.startsWith('/admin/importar'),
+      onClick: () => router.push('/admin/importar'),
     },
     ...(showBackToDashboard
       ? [{

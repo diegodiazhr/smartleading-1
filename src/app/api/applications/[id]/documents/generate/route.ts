@@ -105,6 +105,7 @@ export async function POST(
           [body.doc_id]: {
             content,
             intake: body.intake,
+            questions: body.questions ?? [],
             document_name: body.document_name,
             document_type: body.document_type,
             generated_at: new Date().toISOString(),

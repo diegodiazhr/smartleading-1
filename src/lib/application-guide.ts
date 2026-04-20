@@ -170,10 +170,10 @@ CLASIFICACIÓN DE DOCUMENTOS (source):
 - document_type debe ser uno de: memoria_tecnica, declaracion_responsable, plan_viabilidad, descripcion_proyecto, cronograma, presupuesto_detallado, other_generated, external`
 
   const response = await client.chat.completions.create({
-    model: 'gpt-4o-mini',
+    model: 'gpt-4o',
     messages: [{ role: 'user', content: prompt }],
-    temperature: 0.3,
-    max_tokens: 2500,
+    temperature: 0.2,
+    max_tokens: 4000,
     response_format: { type: 'json_object' },
   })
 

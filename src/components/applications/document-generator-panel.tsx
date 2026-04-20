@@ -16,6 +16,8 @@ interface StoredDoc {
   generated_at: string
   version: number
   edited_at?: string
+  intake?: Record<string, string>
+  questions?: QuestionnaireQuestion[]
 }
 
 interface Props {
@@ -30,8 +32,8 @@ type Stage = 'idle' | 'loading-questions' | 'intake' | 'generating' | 'view' | '
 export default function DocumentGeneratorPanel({ applicationId, companyName, doc, stored: initialStored }: Props) {
   const [stage, setStage] = useState<Stage>(initialStored ? 'view' : 'idle')
   const [stored, setStored] = useState<StoredDoc | null>(initialStored)
-  const [questions, setQuestions] = useState<QuestionnaireQuestion[]>([])
-  const [answers, setAnswers] = useState<Record<string, string>>({})
+  const [questions, setQuestions] = useState<QuestionnaireQuestion[]>(initialStored?.questions ?? [])
+  const [answers, setAnswers] = useState<Record<string, string>>(initialStored?.intake ?? {})
   const [content, setContent] = useState(initialStored?.content ?? '')
   const [editContent, setEditContent] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -41,7 +43,14 @@ export default function DocumentGeneratorPanel({ applicationId, companyName, doc
   const requiredQuestions = questions.filter(q => q.required)
   const canGenerate = requiredQuestions.every(q => (answers[q.id] ?? '').trim().length > 0)
 
-  async function handleStartQuestionnaire() {
+  async function handleStartQuestionnaire(keepAnswers = false) {
+    // If we already have questions from a previous run and the user is regenerating,
+    // skip the loading step and go straight to intake with existing answers.
+    if (keepAnswers && questions.length > 0) {
+      setStage('intake')
+      return
+    }
+
     setStage('loading-questions')
     setError(null)
     try {
@@ -60,7 +69,9 @@ export default function DocumentGeneratorPanel({ applicationId, companyName, doc
         setStage('idle')
         return
       }
+      // Merge new questions but preserve existing answers by ID
       setQuestions(data.questions)
+      if (!keepAnswers) setAnswers({})
       setStage('intake')
     } catch {
       setError('Error de conexión al cargar el cuestionario')
@@ -151,7 +162,7 @@ export default function DocumentGeneratorPanel({ applicationId, companyName, doc
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <button
-          onClick={handleStartQuestionnaire}
+          onClick={() => handleStartQuestionnaire(false)}
           style={{
             display: 'inline-flex', alignItems: 'center', gap: 7,
             padding: '7px 14px', borderRadius: 8,
@@ -374,7 +385,7 @@ export default function DocumentGeneratorPanel({ applicationId, companyName, doc
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button
-              onClick={() => { setStage('idle'); setError(null) }}
+              onClick={() => { setStage(stored ? 'view' : 'idle'); setError(null) }}
               style={{
                 padding: '7px 14px', borderRadius: 8,
                 border: '1px solid var(--line)', background: 'var(--bg)',
@@ -470,7 +481,7 @@ export default function DocumentGeneratorPanel({ applicationId, companyName, doc
             <ToolbarBtn onClick={handleDownload} icon={<Download size={13} />}>
               .docx
             </ToolbarBtn>
-            <ToolbarBtn onClick={handleStartQuestionnaire} icon={<RefreshCw size={13} />} accent>
+            <ToolbarBtn onClick={() => handleStartQuestionnaire(true)} icon={<RefreshCw size={13} />} accent>
               Regenerar
             </ToolbarBtn>
           </div>

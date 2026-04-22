@@ -172,12 +172,12 @@ export function OperacionesPanel({ history }: { history: OperationHistoryRow[] }
         <OpCard
           icon={GitBranch}
           title="Sincronizar fuentes oficiales"
-          description="Orquesta el pipeline oficial completo. Ejecuta BDNS de forma real y registra el resto de publishers para observabilidad del sistema."
+          description="Orquesta el pipeline empresarial ya conectado. Lanza la sync de BOE, Comunidad de Madrid, Andalucía y Cataluña desde el sistema oficial."
           buttonLabel="Lanzar sync oficial"
           confirmMessage="Se lanzará la sincronización del pipeline oficial. ¿Quieres continuar?"
           lastRun={lastByAction.sync_grant_sources}
           result={pipeline}
-          onRun={() => runOp(setPipeline, '/api/admin/sync-grant-sources', { publisherCodes: ['bdns'] }, (d) => {
+          onRun={() => runOp(setPipeline, '/api/admin/sync-grant-sources', { publisherCodes: ['boe', 'ccaa-comunidad-de-madrid', 'ccaa-andalucia', 'ccaa-cataluna'], pageSize: 8 }, (d) => {
             const result = d.result as {
               totals?: { publishers: number; discovered: number; published: number; rejected: number }
               runs?: Array<{ publisherName: string; status: string }>

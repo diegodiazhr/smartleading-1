@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { syncBDNS } from '@/lib/bdns-sync'
+import { grantPublisherIsImplemented, syncOfficialGrantPublisher } from '@/lib/grant-source-adapters'
 import { evaluateGrantQuality, type GrantQualityEvaluation, type GrantPublicationStatus } from '@/lib/grant-quality'
 import type {
   GrantCall,
@@ -44,6 +45,9 @@ export interface GrantSystemPublisherSummary {
   publishedRate: number | null
   errorRate: number | null
   totalRuns: number
+  discoveredTotal: number
+  publishedTotal: number
+  isImplemented: boolean
 }
 
 export interface GrantSystemOverview {
@@ -269,19 +273,47 @@ const PUBLISHER_SEEDS: GrantPublisherSeed[] = [
     is_active: true,
     priority: 84,
   },
-  ...SPANISH_AUTONOMOUS_COMMUNITIES.map((territory, index) => ({
-    code: `ccaa-${territory.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}`,
-    name: `Portal oficial de ayudas · ${territory}`,
-    level: 'ccaa' as const,
-    territory,
-    authority_name: territory,
-    kind: 'portal' as const,
-    parser_key: 'ccaa_portal',
-    discovery_url: null,
-    detail_url_pattern: null,
-    is_active: true,
-    priority: 80 - index,
-  })),
+  ...SPANISH_AUTONOMOUS_COMMUNITIES.map((territory, index) => {
+    const code = `ccaa-${territory.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}`
+    const override =
+      code === 'ccaa-comunidad-de-madrid'
+        ? {
+            parser_key: 'cmadrid_empresas',
+            discovery_url: 'https://sede.comunidad.madrid/becas-ayudas-subvenciones/empresas/pymes',
+            detail_url_pattern: 'https://sede.comunidad.madrid/ayudas-becas-subvenciones/',
+          }
+        : code === 'ccaa-andalucia'
+          ? {
+              parser_key: 'andalucia_empresas',
+              discovery_url: 'https://www.juntadeandalucia.es/temas/empresas/ayudas.html',
+              detail_url_pattern: 'https://www.juntadeandalucia.es/',
+            }
+          : code === 'ccaa-cataluna'
+            ? {
+                parser_key: 'cataluna_financament',
+                discovery_url: 'https://canalempresa.gencat.cat/ca/tramits-i-formularis/actualitat/ambits/financament/',
+                detail_url_pattern: 'https://canalempresa.gencat.cat/ca/',
+              }
+            : {
+                parser_key: 'ccaa_portal',
+                discovery_url: null,
+                detail_url_pattern: null,
+              }
+
+    return {
+      code,
+      name: `Portal oficial de ayudas · ${territory}`,
+      level: 'ccaa' as const,
+      territory,
+      authority_name: territory,
+      kind: 'portal' as const,
+      parser_key: override.parser_key,
+      discovery_url: override.discovery_url,
+      detail_url_pattern: override.detail_url_pattern,
+      is_active: true,
+      priority: 80 - index,
+    }
+  }),
   {
     code: 'municipal',
     name: 'Red BOP / boletines provinciales',
@@ -302,9 +334,9 @@ const PUBLISHER_SEEDS: GrantPublisherSeed[] = [
     territory: 'Madrid',
     authority_name: 'Ayuntamiento de Madrid',
     kind: 'portal',
-    parser_key: 'local_city_portal',
-    discovery_url: null,
-    detail_url_pattern: null,
+    parser_key: 'madrid_ayudas',
+    discovery_url: 'https://www.madrid.es/portales/munimadrid/es/Inicio/Actividad-economica-y-hacienda/Empresa-y-comercio/Ayudas-y-Subvenciones/?vgnextchannel=78da6d5ef88fe410VgnVCM1000000b205a0aRCRD&vgnextoid=4ecff2343378d610VgnVCM1000001d4a900aRCRD',
+    detail_url_pattern: 'https://sede.madrid.es/sites/v/index.jsp',
     is_active: true,
     priority: 76,
   },
@@ -477,6 +509,27 @@ async function getPublisherByCode(code: string) {
   return (data ?? null) as GrantPublisher | null
 }
 
+export async function setGrantPublisherActiveState(code: string, isActive: boolean) {
+  await ensureGrantPublishersSeeded()
+  const admin = createAdminClient()
+  const { data, error } = await admin
+    .from('grant_publishers')
+    .update({ is_active: isActive })
+    .eq('code', code)
+    .select('*')
+    .maybeSingle()
+
+  if (error) {
+    throw new Error(error.message)
+  }
+
+  if (!data) {
+    throw new Error(`Publisher ${code} no configurado`)
+  }
+
+  return data as GrantPublisher
+}
+
 async function getPublishedAndRejectedCountsForSource(source: string, since: string) {
   const admin = createAdminClient()
   const [{ count: published }, { count: rejected }] = await Promise.all([
@@ -643,6 +696,47 @@ export async function syncGrantSources(options: SyncGrantSourcesOptions = {}): P
       continue
     }
 
+    if (grantPublisherIsImplemented(publisher.code)) {
+      const maxItems = Math.max(4, options.pageSize ?? 12)
+      const result = await runGrantPublisherSync(publisher.code, async () => {
+        const stats = await syncOfficialGrantPublisher(publisher, { maxItems })
+        const status =
+          stats.errors.length > 0
+            ? stats.discoveredCount > 0 || stats.fetchedCount > 0 || stats.enrichedCount > 0
+              ? 'partial'
+              : 'error'
+            : 'success'
+
+        return {
+          status,
+          discoveredCount: stats.discoveredCount,
+          fetchedCount: stats.fetchedCount,
+          enrichedCount: stats.enrichedCount,
+          publishedCount: stats.publishedCount,
+          rejectedCount: stats.rejectedCount,
+          errorSummary: stats.errors.length > 0 ? stats.errors.slice(0, 5).join('\n') : null,
+          metadata: {
+            errors: stats.errors.slice(0, 10),
+            maxItems,
+            force: options.force ?? false,
+          },
+        }
+      })
+
+      runs.push({
+        publisherCode: publisher.code,
+        publisherName: publisher.name,
+        status: result.status,
+        discoveredCount: result.discovered_count,
+        fetchedCount: result.fetched_count,
+        enrichedCount: result.enriched_count,
+        publishedCount: result.published_count,
+        rejectedCount: result.rejected_count,
+        errorSummary: result.error_summary,
+      })
+      continue
+    }
+
     const result = await runGrantPublisherSync(publisher.code, async () => ({
       status: 'skipped',
       errorSummary: null,
@@ -711,6 +805,9 @@ export async function getGrantSystemPublishers(): Promise<GrantSystemPublisherSu
       publishedRate: discoveredTotal > 0 ? Number(((publishedTotal / discoveredTotal) * 100).toFixed(1)) : null,
       errorRate: totalRuns > 0 ? Number(((errorRuns / totalRuns) * 100).toFixed(1)) : null,
       totalRuns,
+      discoveredTotal,
+      publishedTotal,
+      isImplemented: grantPublisherIsImplemented(publisher.code),
     }
   })
 }

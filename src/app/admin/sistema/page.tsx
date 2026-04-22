@@ -1,7 +1,8 @@
 import Link from 'next/link'
-import type { CSSProperties, ReactNode } from 'react'
+import type { CSSProperties } from 'react'
 import Header from '@/components/dashboard/header'
 import { AdminEmptyState, AdminPill, AdminSectionCard, AdminStatCard } from '@/components/admin/admin-ui'
+import { GrantPublisherManager } from '@/app/admin/sistema/_publisher-manager'
 import { getGrantSystemOverview, getGrantSystemPublishers } from '@/lib/grant-system'
 import { formatDate } from '@/lib/utils'
 
@@ -133,44 +134,7 @@ export default async function AdminSistemaPage() {
           </AdminSectionCard>
 
           <AdminSectionCard title="Fuentes oficiales" subtitle="Registro de publishers, última ejecución y ratio de publicación">
-            <div style={{ overflowX: 'auto', borderRadius: 12, border: '1px solid var(--line)' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', background: 'var(--bg)' }}>
-                <thead>
-                  <tr style={{ background: 'var(--bg-2)' }}>
-                    <TableHead>Fuente</TableHead>
-                    <TableHead>Nivel</TableHead>
-                    <TableHead>Territorio</TableHead>
-                    <TableHead>Última run</TableHead>
-                    <TableHead>Published rate</TableHead>
-                    <TableHead>Error rate</TableHead>
-                  </tr>
-                </thead>
-                <tbody>
-                  {publishers.map(item => (
-                    <tr key={item.publisher.id}>
-                      <TableCell>
-                        <div style={{ fontWeight: 500, color: 'var(--fg)' }}>{item.publisher.name}</div>
-                        <div style={{ fontSize: 11.5, color: 'var(--fg-4)', marginTop: 3 }}>{item.publisher.code}</div>
-                      </TableCell>
-                      <TableCell>
-                        <AdminPill tone="neutral">{item.publisher.level}</AdminPill>
-                      </TableCell>
-                      <TableCell>{item.publisher.territory ?? '—'}</TableCell>
-                      <TableCell>
-                        <div style={{ display: 'grid', gap: 4 }}>
-                          <AdminPill tone={pillToneForRun(item.lastRun?.status)}>{item.lastRun?.status ?? 'sin runs'}</AdminPill>
-                          <span style={{ fontSize: 11.5, color: 'var(--fg-4)' }}>
-                            {item.lastRun?.finished_at ? formatDate(item.lastRun.finished_at) : 'Aún no ejecutada'}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell>{item.publishedRate !== null ? `${item.publishedRate}%` : '—'}</TableCell>
-                      <TableCell>{item.errorRate !== null ? `${item.errorRate}%` : '—'}</TableCell>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <GrantPublisherManager initialPublishers={publishers} />
           </AdminSectionCard>
         </div>
       </div>
@@ -192,34 +156,6 @@ function Metric({ label, value, tone = 'neutral' }: { label: string; value: stri
       <div style={{ fontSize: 11, color: 'var(--fg-4)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>{label}</div>
       <div style={{ fontSize: 22, fontWeight: 600, color: colors[tone] }}>{value}</div>
     </div>
-  )
-}
-
-function TableHead({ children }: { children: ReactNode }) {
-  return (
-    <th style={{
-      padding: '9px 12px',
-      textAlign: 'left',
-      fontSize: 11,
-      color: 'var(--fg-4)',
-      fontWeight: 500,
-      textTransform: 'uppercase',
-      letterSpacing: '0.06em',
-      borderBottom: '1px solid var(--line)',
-      whiteSpace: 'nowrap',
-    }}>{children}</th>
-  )
-}
-
-function TableCell({ children }: { children: ReactNode }) {
-  return (
-    <td style={{
-      padding: '10px 12px',
-      fontSize: 13,
-      color: 'var(--fg-2)',
-      borderBottom: '1px solid var(--line)',
-      verticalAlign: 'top',
-    }}>{children}</td>
   )
 }
 

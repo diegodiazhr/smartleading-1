@@ -94,7 +94,7 @@ export interface Grant {
   title: string
   body: string | null
   organismo: string | null
-  source: 'bdns' | 'boe' | 'doue' | 'cdti' | 'enisa' | 'icex' | 'ccaa' | 'municipal' | 'manual' | 'other'
+  source: string
   source_url: string | null
   publication_date: string | null
   opening_date: string | null
@@ -132,7 +132,7 @@ export interface GrantProgram {
   title: string
   organismo: string | null
   scope: 'nacional' | 'autonomico' | 'europeo' | 'municipal'
-  source: 'bdns' | 'boe' | 'doue' | 'cdti' | 'enisa' | 'icex' | 'ccaa' | 'municipal' | 'manual' | 'other'
+  source: string
   source_url: string | null
   regions: string[]
   sectors: string[]
@@ -157,7 +157,7 @@ export interface GrantCall {
   status: 'abierta' | 'proxima' | 'cerrada' | 'archivada'
   grant_type: 'fondo_perdido' | 'prestamo' | 'mixto' | 'aval' | 'bonificacion'
   scope: 'nacional' | 'autonomico' | 'europeo' | 'municipal'
-  source: 'bdns' | 'boe' | 'doue' | 'cdti' | 'enisa' | 'icex' | 'ccaa' | 'municipal' | 'manual' | 'other'
+  source: string
   source_url: string | null
   summary: string | null
   raw_text: string | null

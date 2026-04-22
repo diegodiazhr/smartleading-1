@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
-import { createClient } from '@/lib/supabase/server'
 import * as XLSX from 'xlsx'
+import { getAdminCaller } from '@/lib/admin-auth'
+import { logAdminEvent } from '@/lib/admin-audit'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -58,7 +59,6 @@ function parseDate(raw: unknown): string | null {
 }
 
 function buildOrganismo(admin: string, dept: string, organo: string): string {
-  const parts = [admin, dept, organo].map(s => s?.trim()).filter(Boolean)
   // Most specific → least specific: use Órgano if available, else Departamento, else Administración
   return organo?.trim() || dept?.trim() || admin?.trim() || ''
 }
@@ -82,16 +82,10 @@ interface GrantRow {
 }
 
 export async function POST(request: Request) {
-  // Auth check — must be superadmin or admin role
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 })
+  const caller = await getAdminCaller()
+  if (!caller) return Response.json({ error: 'Forbidden' }, { status: 403 })
 
   const admin = createAdminClient()
-  const { data: record } = await admin.from('users').select('is_superadmin, role').eq('id', user.id).single()
-  if (!record?.is_superadmin && record?.role !== 'admin') {
-    return Response.json({ error: 'Forbidden' }, { status: 403 })
-  }
 
   let formData: FormData
   try {
@@ -166,6 +160,15 @@ export async function POST(request: Request) {
   }
 
   if (parsed.length === 0) {
+    await logAdminEvent({
+      actorUserId: caller.id,
+      action: 'import_grants',
+      entityType: 'operation',
+      entityId: 'grant_import',
+      targetLabel: 'Importar convocatorias',
+      status: 'error',
+      metadata: { reason: 'no_valid_rows', parseErrors: parseErrors.length },
+    })
     return Response.json({
       error: 'No se encontraron filas válidas',
       parseErrors: parseErrors.slice(0, 20),
@@ -206,16 +209,28 @@ export async function POST(request: Request) {
     }
   }
 
+  const stats = {
+    total: dataRows.length,
+    parsed: parsed.length,
+    inserted,
+    skipped,
+    insertErrors,
+    parseErrors: parseErrors.length,
+  }
+
+  await logAdminEvent({
+    actorUserId: caller.id,
+    action: 'import_grants',
+    entityType: 'operation',
+    entityId: 'grant_import',
+    targetLabel: 'Importar convocatorias',
+    status: insertErrors > 0 ? 'error' : 'success',
+    metadata: stats,
+  })
+
   return Response.json({
     ok: true,
-    stats: {
-      total: dataRows.length,
-      parsed: parsed.length,
-      inserted,
-      skipped,
-      insertErrors,
-      parseErrors: parseErrors.length,
-    },
+    stats,
     parseErrors: parseErrors.slice(0, 10),
     errorDetails: errorDetails.slice(0, 5),
   })

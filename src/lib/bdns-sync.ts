@@ -1,5 +1,7 @@
 import { createHash } from 'crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { fetchSourceDocumentSnapshot, persistGrantArtifacts } from '@/lib/grant-pipeline'
+import type { Json } from '@/lib/types'
 
 const BASE_URL = (
   process.env.INFOSUBVENCIONES_API_BASE_URL ??
@@ -63,6 +65,10 @@ export interface SyncOptions {
   pageSize?: number
   /** Milliseconds between page requests per VPD. Defaults to 200. */
   delayBetweenPagesMs?: number
+  /** Persist canonical pipeline tables besides the flat grants table. */
+  persistArtifacts?: boolean
+  /** Fetch and store the linked official source document when available. */
+  fetchSourceDocuments?: boolean
 }
 
 export interface VpdSyncResult {
@@ -70,6 +76,8 @@ export interface VpdSyncResult {
   name: string
   pagesProcessed: number
   grantsUpserted: number
+  artifactsPersisted: number
+  sourceDocumentsFetched: number
   error?: string
 }
 
@@ -79,9 +87,12 @@ export interface SyncStats {
   vpdsSkipped: number
   totalGrantsUpserted: number
   totalPagesProcessed: number
+  totalArtifactsPersisted: number
+  totalSourceDocumentsFetched: number
   durationMs: number
   startedAt: string
   completedAt: string
+  warnings: string[]
   vpds: VpdSyncResult[]
 }
 
@@ -259,14 +270,90 @@ function mapToRow(item: ConvocatoriaListItem, detail: ConvocatoriaDetail | null,
   }
 }
 
+async function persistPipelineArtifacts(
+  row: ReturnType<typeof mapToRow>,
+  detail: ConvocatoriaDetail | null,
+  opts: Required<Pick<SyncOptions, 'persistArtifacts' | 'fetchSourceDocuments'>>,
+) {
+  if (!opts.persistArtifacts) return { persisted: false, sourceFetched: false, warning: null as string | null }
+
+  let sourceSnapshot = null
+  let sourceFetched = false
+
+  if (opts.fetchSourceDocuments && row.source_url) {
+    try {
+      sourceSnapshot = await fetchSourceDocumentSnapshot(row.source_url)
+      sourceFetched = true
+    } catch (err) {
+      return {
+        persisted: false,
+        sourceFetched: false,
+        warning: `No se pudo descargar ${row.source_url}: ${err instanceof Error ? err.message : 'unknown_error'}`,
+      }
+    }
+  }
+
+  try {
+    await persistGrantArtifacts({
+      grantId: row.id,
+      externalId: row.external_id,
+      title: row.title,
+      summary: row.summary,
+      body: row.body,
+      organismo: row.organismo,
+      source: row.source,
+      sourceUrl: row.source_url,
+      publicationDate: row.publication_date,
+      openingDate: row.opening_date,
+      deadline: row.deadline,
+      status: row.status,
+      grantType: row.grant_type,
+      scope: row.scope,
+      regions: row.regions,
+      sectors: row.sectors,
+      cnaeCodes: row.cnae_codes,
+      tags: row.tags,
+      budgetTotal: row.budget_total,
+      budgetPerCompanyMin: row.budget_per_company_min,
+      budgetPerCompanyMax: row.budget_per_company_max,
+      minEmployees: row.min_employees,
+      maxEmployees: row.max_employees,
+      minRevenue: row.min_revenue,
+      maxRevenue: row.max_revenue,
+      minCompanyAgeYears: row.min_company_age_years,
+      requirements: Array.isArray(row.requirements) ? row.requirements.map(String) : [],
+      eligibleExpenses: Array.isArray(row.eligible_expenses) ? row.eligible_expenses.map(String) : [],
+      requiredDocuments: Array.isArray(row.required_documents) ? row.required_documents.map(String) : [],
+      rawText: row.raw_text ?? row.body ?? row.summary,
+      detailJson: detail as unknown as Json,
+    }, sourceSnapshot)
+  } catch (err) {
+    return {
+      persisted: false,
+      sourceFetched,
+      warning: `No se pudieron persistir artefactos para ${row.external_id}: ${err instanceof Error ? err.message : 'unknown_error'}`,
+    }
+  }
+
+  return { persisted: true, sourceFetched, warning: null as string | null }
+}
+
 // ── Per-VPD sync ───────────────────────────────────────────────────────────
 
 async function syncVpd(
   vpd: string,
   name: string,
   opts: Required<SyncOptions>,
-): Promise<VpdSyncResult> {
-  const result: VpdSyncResult = { vpd, name, pagesProcessed: 0, grantsUpserted: 0 }
+): Promise<{ result: VpdSyncResult; warnings: string[] }> {
+  const result: VpdSyncResult = {
+    vpd,
+    name,
+    pagesProcessed: 0,
+    grantsUpserted: 0,
+    artifactsPersisted: 0,
+    sourceDocumentsFetched: 0,
+  }
+  const warnings: string[] = []
   const supabase = createAdminClient()
 
   try {
@@ -312,14 +399,73 @@ async function syncVpd(
         mapToRow(item, detailMap.get(item.numeroConvocatoria) ?? null, vpd),
       )
 
-      const { error } = await supabase.from('grants').upsert(rows, { onConflict: 'id' })
+      const { data: existingGrants, error: existingError } = await supabase
+        .from('grants')
+        .select('id, external_id')
+        .eq('source', 'bdns')
+        .in('external_id', rows.map(row => row.external_id))
+
+      if (existingError) {
+        result.error = existingError.message
+        break
+      }
+
+      const existingIdByExternalId = new Map<string, string>()
+      for (const grant of existingGrants ?? []) {
+        if (grant.external_id) existingIdByExternalId.set(grant.external_id, grant.id)
+      }
+
+      const normalizedRows = rows.map(row => ({
+        ...row,
+        id: existingIdByExternalId.get(row.external_id) ?? row.id,
+      }))
+
+      const { error } = await supabase.from('grants').upsert(normalizedRows, { onConflict: 'source,external_id' })
       if (error) {
         result.error = error.message
         break
       }
 
+      const { data: persistedGrants, error: persistedError } = await supabase
+        .from('grants')
+        .select('id, external_id')
+        .eq('source', 'bdns')
+        .in('external_id', normalizedRows.map(row => row.external_id))
+
+      if (persistedError) {
+        result.error = persistedError.message
+        break
+      }
+
+      const grantIdByExternalId = new Map<string, string>()
+      for (const grant of persistedGrants ?? []) {
+        if (grant.external_id) grantIdByExternalId.set(grant.external_id, grant.id)
+      }
+
       result.pagesProcessed++
-      result.grantsUpserted += rows.length
+      result.grantsUpserted += normalizedRows.length
+
+      for (let i = 0; i < normalizedRows.length; i += 5) {
+        const chunk = normalizedRows.slice(i, i + 5)
+        const chunkItems = items.slice(i, i + 5)
+        const persistedResults = await Promise.all(
+          chunk.map(async row => {
+            const item = chunkItems.find(candidate => candidate.numeroConvocatoria === row.external_id)
+            const detail = item ? detailMap.get(item.numeroConvocatoria) ?? null : null
+            return persistPipelineArtifacts(
+              { ...row, id: grantIdByExternalId.get(row.external_id) ?? row.id },
+              detail,
+              opts,
+            )
+          }),
+        )
+
+        for (const persisted of persistedResults) {
+          if (persisted.persisted) result.artifactsPersisted++
+          if (persisted.sourceFetched) result.sourceDocumentsFetched++
+          if (persisted.warning) warnings.push(persisted.warning)
+        }
+      }
 
       if (listResponse.last) break
       if (page < opts.maxPagesPerVpd - 1) await sleep(opts.delayBetweenPagesMs)
@@ -328,7 +474,7 @@ async function syncVpd(
     result.error = err instanceof Error ? err.message : 'unknown_error'
   }
 
-  return result
+  return { result, warnings }
 }
 
 // ── Public API ─────────────────────────────────────────────────────────────
@@ -342,15 +488,19 @@ export async function syncBDNS(options: SyncOptions = {}): Promise<SyncStats> {
     maxPagesPerVpd: options.maxPagesPerVpd ?? 20,
     pageSize: Math.min(50, Math.max(1, options.pageSize ?? 50)),
     delayBetweenPagesMs: options.delayBetweenPagesMs ?? 200,
+    persistArtifacts: options.persistArtifacts ?? true,
+    fetchSourceDocuments: options.fetchSourceDocuments ?? false,
   }
 
   const startedAt = new Date().toISOString()
   const startMs = Date.now()
   const results: VpdSyncResult[] = []
+  const warnings: string[] = []
 
   for (const vpd of vpdsToSync) {
-    const result = await syncVpd(vpd.code, vpd.name, opts)
+    const { result, warnings: vpdWarnings } = await syncVpd(vpd.code, vpd.name, opts)
     results.push(result)
+    warnings.push(...vpdWarnings)
     await sleep(150) // brief pause between VPDs
   }
 
@@ -360,9 +510,12 @@ export async function syncBDNS(options: SyncOptions = {}): Promise<SyncStats> {
     vpdsSkipped: results.filter(r => !r.error && r.pagesProcessed === 0).length,
     totalGrantsUpserted: results.reduce((s, r) => s + r.grantsUpserted, 0),
     totalPagesProcessed: results.reduce((s, r) => s + r.pagesProcessed, 0),
+    totalArtifactsPersisted: results.reduce((s, r) => s + r.artifactsPersisted, 0),
+    totalSourceDocumentsFetched: results.reduce((s, r) => s + r.sourceDocumentsFetched, 0),
     durationMs: Date.now() - startMs,
     startedAt,
     completedAt: new Date().toISOString(),
+    warnings,
     vpds: results,
   }
 }

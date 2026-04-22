@@ -1,8 +1,15 @@
 import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { enrichGrant } from '@/lib/grant-enrichment'
+import { getAdminCaller } from '@/lib/admin-auth'
+import { logAdminEvent } from '@/lib/admin-audit'
 
 export async function POST() {
+  const caller = await getAdminCaller()
+  if (!caller) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   try {
     const admin = createAdminClient()
 
@@ -49,12 +56,33 @@ export async function POST() {
       }))
     }
 
+    const stats = { total: grants.length, enriched, failed, durationMs: Date.now() - start }
+
+    await logAdminEvent({
+      actorUserId: caller.id,
+      action: 'enrich_grants',
+      entityType: 'operation',
+      entityId: 'grant_enrichment',
+      targetLabel: 'Enriquecer convocatorias',
+      status: failed > 0 ? 'error' : 'success',
+      metadata: stats,
+    })
+
     return NextResponse.json({
       ok: true,
-      stats: { total: grants.length, enriched, failed, durationMs: Date.now() - start },
+      stats,
     })
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Unknown error'
+    await logAdminEvent({
+      actorUserId: caller.id,
+      action: 'enrich_grants',
+      entityType: 'operation',
+      entityId: 'grant_enrichment',
+      targetLabel: 'Enriquecer convocatorias',
+      status: 'error',
+      metadata: { error: msg },
+    })
     return NextResponse.json({ ok: false, error: msg }, { status: 500 })
   }
 }

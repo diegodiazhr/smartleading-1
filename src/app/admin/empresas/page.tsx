@@ -7,30 +7,35 @@ export default async function AdminEmpresasPage() {
 
   const { data: companies } = await admin
     .from('companies')
-    .select('id, name, cif, cnae_primary, region, employees_count, revenue_annual, is_startup, has_rd, created_at')
+    .select('id, name, cif, cnae_primary, region, municipality, website, employees_count, revenue_annual, is_startup, has_rd, doc_score, created_at, updated_at')
     .order('created_at', { ascending: false })
 
-  const companyIds = (companies ?? []).map(c => c.id)
-  const matchCounts: Record<string, { total: number; high: number }> = {}
+  const companyIds = (companies ?? []).map(company => company.id)
+  const matchCounts: Record<string, { total: number; high: number; lastCalculated: string | null }> = {}
 
   if (companyIds.length > 0) {
     const { data: matches } = await admin
       .from('company_grant_matches')
-      .select('company_id, eligibility_score')
+      .select('company_id, eligibility_score, last_calculated')
       .in('company_id', companyIds)
       .gte('eligibility_score', 40)
 
     for (const m of matches ?? []) {
-      if (!matchCounts[m.company_id]) matchCounts[m.company_id] = { total: 0, high: 0 }
-      matchCounts[m.company_id].total++
-      if (m.eligibility_score >= 70) matchCounts[m.company_id].high++
+      if (!matchCounts[m.company_id]) matchCounts[m.company_id] = { total: 0, high: 0, lastCalculated: null }
+      const stats = matchCounts[m.company_id]
+      stats.total++
+      if (m.eligibility_score >= 70) stats.high++
+      if (m.last_calculated && (!stats.lastCalculated || m.last_calculated > stats.lastCalculated)) {
+        stats.lastCalculated = m.last_calculated
+      }
     }
   }
 
-  const rows = (companies ?? []).map(c => ({
-    ...c,
-    matchTotal: matchCounts[c.id]?.total ?? 0,
-    matchHigh: matchCounts[c.id]?.high ?? 0,
+  const rows = (companies ?? []).map(company => ({
+    ...company,
+    matchTotal: matchCounts[company.id]?.total ?? 0,
+    matchHigh: matchCounts[company.id]?.high ?? 0,
+    lastCalculated: matchCounts[company.id]?.lastCalculated ?? null,
   }))
 
   return (

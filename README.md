@@ -29,6 +29,44 @@ To learn more about Next.js, take a look at the following resources:
 
 You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
+## BDNS Grant Pipeline
+
+This project now includes a first-pass grant ingestion pipeline for Spanish public subsidies:
+
+- `POST /api/admin/sync-bdns`
+  Syncs BDNS grants into the flat `grants` table and also persists canonical artifacts into:
+  `grant_programs`, `grant_calls`, `grant_source_records`, `grant_eligibility_rules`,
+  `grant_funding_terms`, `grant_document_requirements`, `grant_expense_rules`,
+  and `grant_field_evidence`.
+- `GET /api/grants/search`
+  Searches against the canonical model first (`grant_calls` + eligibility + funding terms)
+  and falls back to `grants` only if canonical data is not available yet.
+- `GET /api/cron/sync-bdns`
+  Intended for scheduled incremental syncs.
+
+Optional request body for `POST /api/admin/sync-bdns`:
+
+```json
+{
+  "maxPagesPerVpd": 200,
+  "pageSize": 50,
+  "persistArtifacts": true,
+  "fetchSourceDocuments": false
+}
+```
+
+Database support for the canonical pipeline lives in:
+
+- `supabase/migrations/20260420173000_grant_pipeline.sql`
+- `supabase/migrations/20260420181500_grant_search_indexes.sql`
+
+Notes:
+
+- The canonical pipeline is additive: existing app screens can keep reading from `grants`.
+- The search API now ranks on text relevance, business fit, freshness, amount, and source quality.
+- Source-document fetching is optional because it is slower and depends on third-party portals.
+- HTML/text sources are stored as snapshots today; richer PDF/OCR extraction can be layered on top next.
+
 ## Deploy on Vercel
 
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.

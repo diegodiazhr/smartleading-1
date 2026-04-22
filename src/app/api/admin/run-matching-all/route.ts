@@ -1,5 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { runMatching } from '@/lib/matching'
+import { getAdminCaller } from '@/lib/admin-auth'
+import { logAdminEvent } from '@/lib/admin-audit'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300
@@ -12,7 +14,8 @@ function isAuthorized(request: Request): boolean {
 }
 
 export async function POST(request: Request) {
-  if (!isAuthorized(request)) {
+  const caller = await getAdminCaller()
+  if (!isAuthorized(request) && !caller) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -41,6 +44,20 @@ export async function POST(request: Request) {
       })
     }
   }
+
+  await logAdminEvent({
+    actorUserId: caller?.id,
+    action: 'run_matching_all',
+    entityType: 'operation',
+    entityId: 'matching_all',
+    targetLabel: 'Recalcular matching',
+    status: results.every(result => result.ok) ? 'success' : 'error',
+    metadata: {
+      total: companies.length,
+      ok: results.filter(result => result.ok).length,
+      failed: results.filter(result => !result.ok).length,
+    },
+  })
 
   return Response.json({ ok: true, total: companies.length, results })
 }

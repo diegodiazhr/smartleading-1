@@ -14,7 +14,11 @@ export async function GET(request: Request) {
   }
 
   try {
-    const stats = await syncBDNS({ maxPagesPerVpd: 5 })
+    const stats = await syncBDNS({
+      maxPagesPerVpd: 5,
+      persistArtifacts: true,
+      fetchSourceDocuments: false,
+    })
     console.log('[cron/sync-bdns]', JSON.stringify({ ok: true, stats }))
     return Response.json({ ok: true, stats })
   } catch (err) {

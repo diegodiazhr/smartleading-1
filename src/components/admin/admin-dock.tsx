@@ -1,7 +1,7 @@
 'use client'
 
 import { usePathname, useRouter } from 'next/navigation'
-import { LayoutDashboard, RefreshCw, Building2, Users, Upload, ArrowLeft, LogOut } from 'lucide-react'
+import { LayoutDashboard, RefreshCw, Building2, Building, Users, Upload, ArrowLeft, LogOut, Bell, FileStack, ScrollText, GitBranch } from 'lucide-react'
 import { Dock } from '@/components/ui/dock-two'
 import { createClient } from '@/lib/supabase/client'
 
@@ -45,6 +45,36 @@ export function AdminDock({ showBackToDashboard }: { showBackToDashboard: boolea
       label: 'Importar',
       active: pathname.startsWith('/admin/importar'),
       onClick: () => router.push('/admin/importar'),
+    },
+    {
+      icon: Bell,
+      label: 'Alertas',
+      active: pathname.startsWith('/admin/alertas'),
+      onClick: () => router.push('/admin/alertas'),
+    },
+    {
+      icon: FileStack,
+      label: 'Convocatorias',
+      active: pathname.startsWith('/admin/convocatorias'),
+      onClick: () => router.push('/admin/convocatorias'),
+    },
+    {
+      icon: GitBranch,
+      label: 'Sistema',
+      active: pathname.startsWith('/admin/sistema'),
+      onClick: () => router.push('/admin/sistema'),
+    },
+    {
+      icon: Building,
+      label: 'Organizaciones',
+      active: pathname.startsWith('/admin/organizaciones'),
+      onClick: () => router.push('/admin/organizaciones'),
+    },
+    {
+      icon: ScrollText,
+      label: 'Auditoría',
+      active: pathname.startsWith('/admin/auditoria'),
+      onClick: () => router.push('/admin/auditoria'),
     },
     ...(showBackToDashboard
       ? [{
